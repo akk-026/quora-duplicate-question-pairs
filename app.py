@@ -1,42 +1,67 @@
 import streamlit as st
-import joblib
 import numpy as np
+import joblib
+from gensim.models import Word2Vec
+from fuzzywuzzy import fuzz
 
-# Load models
-rf_model = joblib.load("random_forest_model.pkl")
-xgb_model = joblib.load("xgboost_model.pkl")
-w2v_model = joblib.load("word2vec_model.pkl")
+# Load Word2Vec model (trained and saved separately)
+@st.cache_resource
+def load_w2v_model():
+    return joblib.load("word2vec_model.pkl")
 
-# Function to convert question to average word2vec vector
+# Load ML model
+@st.cache_resource
+def load_model(model_choice):
+    if model_choice == 'Random Forest':
+        return joblib.load("rf_model_compressed.pkl")
+    elif model_choice == 'XGBoost':
+        return joblib.load("xgboost_model.pkl")
+
+# Convert question to vector
 def question_to_vec(question, model, vector_size=300):
-    words = question.lower().strip().split()
+    words = question.split()
     word_vecs = [model.wv[word] for word in words if word in model.wv]
     if len(word_vecs) == 0:
         return np.zeros(vector_size)
     return np.mean(word_vecs, axis=0)
 
-# Streamlit UI
-st.title("🤖 Quora Duplicate Question Detector")
+# Combine features for both questions
+def generate_features(q1, q2, w2v_model):
+    q1_vec = question_to_vec(q1, w2v_model)
+    q2_vec = question_to_vec(q2, w2v_model)
+    abs_diff = np.abs(q1_vec - q2_vec)
+    features = np.hstack((q1_vec, q2_vec, abs_diff))
+    return features.reshape(1, -1)
 
-q1 = st.text_input("Enter Question 1")
-q2 = st.text_input("Enter Question 2")
+# Streamlit App UI
+st.title("❓ Quora Duplicate Question Detector")
+st.markdown("Check if two questions mean the same thing using ML models trained on Quora dataset.")
 
-model_choice = st.radio("Choose a model:", ["Random Forest", "XGBoost"])
+q1 = st.text_input("Enter Question 1", "")
+q2 = st.text_input("Enter Question 2", "")
 
-if st.button("Check Duplicate"):
-    if q1 and q2:
-        q1_vec = question_to_vec(q1, w2v_model).reshape(1, -1)
-        q2_vec = question_to_vec(q2, w2v_model).reshape(1, -1)
-        X = np.hstack((q1_vec, q2_vec, np.abs(q1_vec - q2_vec)))
+model_choice = st.selectbox("Choose Model", ["Random Forest", "XGBoost"])
 
-        if model_choice == "Random Forest":
-            pred = rf_model.predict(X)[0]
-        else:
-            pred = xgb_model.predict(X)[0]
-
-        if pred == 1:
-            st.success("✅ These questions are duplicates!")
-        else:
-            st.warning("❌ These questions are not duplicates.")
+if st.button("Check if Duplicate"):
+    if q1.strip() == "" or q2.strip() == "":
+        st.warning("⚠️ Please enter both questions.")
     else:
-        st.info("Please enter both questions to proceed.")
+        # Load models
+        w2v_model = load_w2v_model()
+        model = load_model(model_choice)
+
+        # Generate feature vector
+        features = generate_features(q1, q2, w2v_model)
+
+        # Predict
+        prediction = model.predict(features)[0]
+        prob = model.predict_proba(features)[0][1] if hasattr(model, 'predict_proba') else None
+
+        # Display results
+        if prediction == 1:
+            st.success("✅ The questions are **Duplicate**.")
+        else:
+            st.error("❌ The questions are **Not Duplicate**.")
+
+        if prob is not None:
+            st.markdown(f"**Model confidence:** `{prob:.2f}`")
