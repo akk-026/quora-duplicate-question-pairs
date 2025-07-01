@@ -1,14 +1,13 @@
 streamlit==1.32.2
 scikit-learn==1.2.2
-numpy==1.23.5
-pandas==1.5.3
+numpy>=1.26.0            # ✅ Upgraded to avoid distutils (removed in Python 3.12+)
+pandas>=1.5.3            # ✅ Use latest 1.x or 2.x (1.5.3 works, but >=1.5.3 gives flexibility)
 joblib==1.2.0
 xgboost==1.7.6
 nltk==3.8.1
 gensim==4.3.2
-matplotlib==3.7.1
-seaborn==0.12.2
+matplotlib>=3.7.1        # ✅ 3.7.1+ compatible with latest Python versions
+seaborn>=0.12.2
 beautifulsoup4==4.12.2
-fuzzywuzzy==0.18.0
-python-Levenshtein==0.21.1
-# rebuild
+fuzzywuzzy==0.18.0       # ⚠️ Deprecated — still works, but not maintained
+python-Levenshtein>=0.21.1  # ✅ Safe and needed for fuzzywuzzy performance
